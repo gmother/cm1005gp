@@ -22,16 +22,26 @@ var floorPos_y;
 var canyonPos_y;
 var leftLimit;
 var rightLimit;
-var isLeft = false;
-var isRight = false;
-var isJump = false;
-var isInCanyon = false;
-var isFalling = false;
-var isPlummeting = false;
+var isLeft;
+var isRight;
+var isJump;
+var isInCanyon;
+var isFalling;
+var isPlummeting;
+var isDead;
+var isReached;
+var isRaised;
+
+var isDialogOpened;
+var isGameOverDialog;
+var isNextLevelDialog;
+var isDiedDialog;
+
 var scores = 0;
 
 var borderLeft = -512;
 var borderRight = 1536;
+var flagpole_x = 1480;
 var collectable;
 
 var trees_x = [];
@@ -47,18 +57,40 @@ var keyCodes = {left: 65, right: 68, jump: 32}; // top: 87, bottom: 83
 
 function setup() {
 	createCanvas(1024, 576);
+    startGame();
+}
+
+function startGame() {
+    scores = 0;
+    lives = 3;
+    resetScene();
+}
+
+function resetScene() {
 	floorPos_y = height * 3/4;
     canyonPos_y = height - 10;
 	gameChar_x = width/2;
-	gameChar_y = floorPos_y;
+	gameChar_y = floorPos_y - 50;
     leftLimit = borderLeft + borderLimit;
     rightLimit = borderRight - borderLimit;
+    topLimit = 100;
+    
     generateRandomCollectables();
     
     initTrees();
     initClouds();
     initMountains();
     initCanyons();
+
+    isLeft = false;
+    isRight = false;
+    isJump = false;
+    isInCanyon = false;
+    isFalling = true;
+    isPlummeting = false;
+    isDead = false;
+    isReached = false;
+    isRaised = false;
 }
 
 function draw()
@@ -77,12 +109,22 @@ function draw()
     drawClouds();
     drawMountains();
     drawTrees();
+    renderFlagpole();
 
     isInCanyon = isCharInCanyon();
     isPlummeting = isCharPlummeting();
+    isDead = isCharDead();
 
 	//the game character
-	if(isLeft && (isFalling || isPlummeting))
+	if(isDead)
+    {
+        drawCharDead();
+    }
+    else if (isRaised) {
+        gameChar_y = floorPos_y;
+		drawCharFF();
+    }
+    else if(isLeft && (isFalling || isPlummeting))
 	{
         moveCharJump();
         moveCharLeft();
@@ -119,8 +161,21 @@ function draw()
     processAndDrawCollectables();
     
     pop();
+
+    if(isDead)
+    {
+        if (lives > 0) {
+            renderDiedDialog();
+        } else {
+            renderGameOverDialog();
+        }
+    }
+    else if (isRaised) {
+        renderNextLevelDialog();
+    }
     
     drawButtons();
+    drawLives();
     drawScores();
 }
 
@@ -132,6 +187,7 @@ function getCameraX()
 }
 
 function initTrees() {
+    trees_x = [];
     start = floor(random(borderLeft, borderLeft + 200))
     for (i = start; i < borderRight+300; i += floor(random(200, 500))) {
         trees_x.push(i)
@@ -139,6 +195,7 @@ function initTrees() {
 }
 
 function initClouds() {
+    clouds = [];
     start = borderLeft - 200
     for (i = start; i < borderRight+200; i += floor(random(150, 300))) {
         clouds.push({x: i, y: floor(random(50, 300)), size: floor(random(80, 140))})
@@ -146,6 +203,7 @@ function initClouds() {
 }
 
 function initMountains() {
+    mountains = [];
     start = floor(random(borderLeft, borderLeft + 500))
     for (i = start; i < borderRight+400; i += floor(random(900, 1500))) {
         mountains.push({x: i, size: floor(random(150, 250))})
@@ -153,6 +211,7 @@ function initMountains() {
 }
 
 function initCanyons() {
+    canyons = [];
     start = floor(random(borderLeft+100, borderLeft + 500))
     for (i = start; i < borderRight-100; i += floor(random(500, 700))) {
         if (abs(i - gameChar_x) < 100) continue;
@@ -211,6 +270,11 @@ function isCharPlummeting()
     return isCharInCanyon() && gameChar_y < canyonPos_y;
 }
 
+function isCharDead() 
+{
+    return isCharInCanyon() && gameChar_y == canyonPos_y;
+}
+
 function isCollectableReached(collectable)
 {
     return gameChar_x > collectable.x - collectable.size / 2 - 10 &&
@@ -236,6 +300,7 @@ function getFloor() {
 }
 
 function generateRandomCollectables() {
+    collectables = [];
     for (var i = 0; i < collectableNum; i++) {
         collectables.push(generateRandomCollectable())
     }
@@ -263,6 +328,23 @@ function keyPressed()
     }
     
     if (keyCode == keyCodes.jump) {
+        if (isDead) {
+            if (lives > 0) {
+                lives--;
+                resetScene();
+                return;
+            } else {
+                startGame();
+                return;
+            }
+        }
+
+        if (isRaised) {
+            resetScene();
+            return;
+        }
+
+
         isJump = true;
         if (!isFalling && !isPlummeting) {
             isFalling = true;
@@ -292,6 +374,9 @@ function drawCharFF() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x - 2, gameChar_y - 68, gameChar_x - 5, gameChar_y - 68);
+    line(gameChar_x + 2, gameChar_y - 68, gameChar_x + 5, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -342,6 +427,8 @@ function drawCharLeft1() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x - 3, gameChar_y - 68, gameChar_x - 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -384,6 +471,8 @@ function drawCharLeft2() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x - 3, gameChar_y - 68, gameChar_x - 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -434,6 +523,8 @@ function drawCharRight1() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x + 3, gameChar_y - 68, gameChar_x + 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -476,6 +567,8 @@ function drawCharRight2() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x + 3, gameChar_y - 68, gameChar_x + 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -518,6 +611,9 @@ function drawCharJumpFF() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x - 2, gameChar_y - 68, gameChar_x - 5, gameChar_y - 68);
+    line(gameChar_x + 2, gameChar_y - 68, gameChar_x + 5, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -560,6 +656,7 @@ function drawCharJumpLeft() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    line(gameChar_x - 3, gameChar_y - 68, gameChar_x - 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -602,6 +699,8 @@ function drawCharJumpRight() {
     // head
     fill(faceColor);
     ellipse(gameChar_x, gameChar_y - 66, 18, 18);
+    stroke(1);
+    line(gameChar_x + 3, gameChar_y - 68, gameChar_x + 6, gameChar_y - 68);
     
     // legs
     stroke(0);
@@ -633,6 +732,53 @@ function drawCharJumpRight() {
     vertex(gameChar_x + 7, gameChar_y - 51);
     vertex(gameChar_x + 11, gameChar_y - 39);
     vertex(gameChar_x + 23, gameChar_y - 35);
+    endShape();
+}
+
+function drawCharDead() {
+    // body
+    fill(bodyColor);
+    ellipse(gameChar_x, gameChar_y - 17, 18, 34);
+    
+    // head
+    fill(faceColor);
+    ellipse(gameChar_x + 4, gameChar_y - 35, 18, 18);
+    stroke(1);
+    line(gameChar_x - 2, gameChar_y - 33, gameChar_x + 2, gameChar_y - 37);
+    line(gameChar_x - 2, gameChar_y - 37, gameChar_x + 2, gameChar_y - 33);
+    line(gameChar_x + 6, gameChar_y - 33, gameChar_x + 10, gameChar_y - 37);
+    line(gameChar_x + 6, gameChar_y - 37, gameChar_x + 10, gameChar_y - 33);
+    
+    // legs
+    stroke(0);
+    noFill();
+    // left leg
+    beginShape();
+    vertex(gameChar_x - 5, gameChar_y - 2);
+    vertex(gameChar_x - 19, gameChar_y - 6);
+    vertex(gameChar_x - 7, gameChar_y - 16);
+    vertex(gameChar_x - 10, gameChar_y - 19);
+    endShape();
+    // right leg
+    beginShape();
+    vertex(gameChar_x + 5, gameChar_y - 2);
+    vertex(gameChar_x + 11, gameChar_y - 14);
+    vertex(gameChar_x + 21, gameChar_y - 7);
+    vertex(gameChar_x + 15, gameChar_y - 4);
+    endShape();
+    
+    // hands
+    // left hand
+    beginShape();
+    vertex(gameChar_x - 7, gameChar_y - 24);
+    vertex(gameChar_x - 19, gameChar_y - 13);
+    vertex(gameChar_x - 16, gameChar_y - 2);
+    endShape();
+    // right hand
+    beginShape();
+    vertex(gameChar_x + 7, gameChar_y - 24);
+    vertex(gameChar_x + 19, gameChar_y - 13);
+    vertex(gameChar_x + 16, gameChar_y - 2);
     endShape();
 }
 
@@ -741,6 +887,83 @@ function drawCloud(cloud)
     ellipse(cloud.x, cloud.y, cloud.size * 1.2, cloud.size * 0.6);
     ellipse(cloud.x + cloud.size * 0.4, cloud.y + cloud.size * 0.1, cloud.size * 0.8, cloud.size * 0.4);
     ellipse(cloud.x - cloud.size * 0.6, cloud.y + cloud.size * 0.2, cloud.size * 1.4, cloud.size * 0.5);
+}
+
+function renderFlagpole()
+{
+    checkReached();
+
+    var flagTop = floorPos_y - 200;
+    var flagBottom = floorPos_y - 50;
+
+    if (isRaised) {
+        flagY = flagTop;
+    } else if (isReached) {
+        flagY = max(flagTop, flagY - 5);
+        if (flagY == flagTop) {
+            isRaised = true;
+        }
+    } else {
+        flagY = flagBottom;
+    }
+
+    stroke(160);
+    strokeWeight(5);
+    line(flagpole_x, floorPos_y, flagpole_x, floorPos_y - 200);
+    noStroke();
+
+    var raise = (flagBottom - flagY) / (flagBottom - flagTop);
+    fill(160 * (1 - raise), 160 * raise, 0);
+    triangle(
+        flagpole_x, flagY, flagpole_x, flagY + 30, flagpole_x + 30, flagY + 15
+    );
+    strokeWeight(1);
+}
+
+function checkReached() 
+{
+    isReached = isReached || abs(gameChar_x - flagpole_x) < 20
+}
+
+function renderGameOverDialog()
+{
+    renderDialog("Game Over", "Press Space to restart game", "gray");
+}
+
+function renderNextLevelDialog()
+{
+    renderDialog("Next Level", "Press Space for next level", "green");
+}
+
+function renderDiedDialog()
+{
+    renderDialog("You Died", "Press Space to try again", "red");
+}
+
+function renderDialog(title, descr, color)
+{
+    stroke(color);
+    strokeWeight(10);
+    fill(0);
+    rect(80, 80, width - 160, height - 160);
+    textAlign(CENTER);
+    textStyle(BOLD);
+    textSize(150);
+    noStroke();
+    fill(color);
+    text(title, width/2, 320);
+    textSize(30);
+    text(descr, width/2, 450);
+}
+
+function drawLives()
+{
+    textAlign(LEFT);
+    textStyle(BOLD);
+    textSize(36);
+    noStroke();
+    fill("green");
+    text("Lives: " + lives, 30, 40);
 }
 
 function drawScores()
