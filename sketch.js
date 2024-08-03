@@ -41,6 +41,7 @@ var isNextLevelDialog;
 var isDiedDialog;
 
 var scores = 0;
+var level = 1;
 
 var flagpole_x = borderRight - 50;
 var collectable;
@@ -50,8 +51,23 @@ var clouds = [];
 var mountains = [];
 var collectables = [];
 var canyons = [];
+var ghosts = [];
+
 var collectableNum = 3;
+var ghostsNum = 3;
 var curCanyon = 0;
+var dialogOpacity = 8;
+
+var showIntro = true;
+var introTitle = "The Game";
+var introText = [
+    "This is a game about the adventures of a brave noname guy,",
+    "who loves apples and hates ghosts. Thats why he travels",
+    "through levels, collecting the first and killing the second.",
+    "By jumping, he can either reach a distant apple or kill a ghost.",
+    "",
+    "Press SPACE to start the adventure."
+];
 
 
 var keyCodes = {left: 65, right: 68, jump: 32}; // top: 87, bottom: 83
@@ -74,6 +90,9 @@ function setup() {
 function startGame() {
     scores = 0;
     lives = 3;
+    level = 1;
+    collectableNum = 5;
+    ghostsNum = 3;
     resetScene();
 }
 
@@ -85,8 +104,12 @@ function resetScene() {
     leftLimit = borderLeft + borderLimit;
     rightLimit = borderRight - borderLimit;
     topLimit = 100;
+    dialogOpacity = 8;
     
+    collectableNum = level + 4;
+    ghostsNum = level * 2 + 1;
     generateRandomCollectables();
+    generateGhosts();
     
     initTrees();
     initClouds();
@@ -116,6 +139,11 @@ function draw()
     push();
     translate(getCameraX(), 0);
     
+    if (showIntro) {
+        renderIntro();
+        return;
+    }
+    
 	//draw the canyon
     drawCanyons();
     drawClouds();
@@ -130,6 +158,7 @@ function draw()
 	//the game character
 	if(isDead)
     {
+        stopSteps();
         drawCharDead();
     }
     else if (isReached || isRaised) {
@@ -177,6 +206,7 @@ function draw()
 		drawCharFF();
 	}
     
+    processAndDrawGhosts();
     processAndDrawCollectables();
     
     pop();
@@ -200,6 +230,7 @@ function draw()
     
     drawButtons();
     drawLives();
+    drawLevel();
     drawScores();
 }
 
@@ -309,7 +340,7 @@ function isCharPlummeting()
 
 function isCharDead() 
 {
-    return isCharInCanyon() && gameChar_y == canyonPos_y;
+    return isDead || (isCharInCanyon() && gameChar_y == canyonPos_y);
 }
 
 function isCollectableReached(collectable)
@@ -327,7 +358,9 @@ function processAndDrawCollectables()
         if (isCollectableReached(collectables[i])) {
             scores = scores + collectables[i].score;
             sounds.score.play(0.35);
-            collectables[i] = generateRandomCollectable();
+            if (random() > 0.5) {
+                collectables[i] = generateRandomCollectable();
+            }
         }
         drawCollectable(collectables[i]);
     }
@@ -335,6 +368,18 @@ function processAndDrawCollectables()
 
 function getFloor() {
     return isCanyon() ? canyonPos_y : floorPos_y;
+}
+
+function generateGhosts() {
+    ghosts = [];
+    for (var i = 0; i < ghostsNum; i++) {
+        var x = null;
+        while (x === null || Math.abs(x - gameChar_x) < 50) {
+            x = random(borderLeft + borderLimit, borderRight - borderLimit);
+        } 
+        ghosts.push(new Ghost(x, 50));
+    }
+    console.log(ghosts);
 }
 
 function generateRandomCollectables() {
@@ -366,6 +411,12 @@ function keyPressed()
     }
     
     if (keyCode == keyCodes.jump) {
+        if (showIntro) {
+            showIntro = false;
+            startGame();
+            return;
+        }
+        
         if (isDead) {
             if (lives > 0) {
                 lives--;
@@ -927,6 +978,80 @@ function drawCloud(cloud)
     ellipse(cloud.x - cloud.size * 0.6, cloud.y + cloud.size * 0.2, cloud.size * 1.4, cloud.size * 0.5);
 }
 
+function processAndDrawGhosts()
+{
+    for (var i = 0; i < ghosts.length; i++) {
+        if (ghosts[i].dead) {
+            continue;
+        }
+        
+        ghosts[i].move();
+        if (ghosts[i].isDying()) {
+            if (!sounds.hit.isPlaying()) {
+                sounds.hit.play();
+                scores += 15;
+            }
+            ghosts[i].dead = true;
+        }
+        if (ghosts[i].isKilling()) {
+            isDead = true;
+        }
+        ghosts[i].draw();
+    }
+}
+
+function Ghost(x, y)
+{
+    this.x = x;
+    this.y = y;
+    this.dir = 1;
+    this.dead = false;
+    
+    this.move = function() {
+        if (this.dir == 1) {
+            if (this.x - 40 > gameChar_x || this.x < borderLeft + 20) {
+                this.dir = -1;
+            }
+        } else {
+            if (this.x + 40 < gameChar_x || this.x > borderRight - 20) {
+                this.dir = 1;
+            }
+        }
+        
+        if (this.y < floorPos_y) {
+            this.y += 5;
+            return;
+        }
+        
+        this.x += this.dir * 2;
+    };
+    
+    this.isDying = function() {
+        return this.isTouched() && (jumpVelocity < 0 || gameChar_y < floorPos_y - 5);
+    };
+    
+    this.isKilling = function() {
+        return this.isTouched() && !this.isDying() && gameChar_y <= floorPos_y;
+    };
+    
+    this.isTouched = function() {
+        return Math.abs(this.x - gameChar_x) < 21;
+    };
+    
+    this.draw = function() {
+        stroke("black");
+        strokeWeight(1);
+        fill(224);
+        rect(this.x - 21, this.y - 41, 42, 30);
+        arc(this.x, this.y - 40, 42, 42, PI, PI * 2);
+        arc(this.x - 14, this.y - 12, 14, 14, 0, PI);
+        arc(this.x, this.y - 12, 14, 14, 0, PI);
+        arc(this.x + 14, this.y - 12, 14, 14, 0, PI);
+        ellipse(this.x - 7 + this.dir * 5, this.y - 41, 8, 8);
+        ellipse(this.x + 7 + this.dir * 5, this.y - 41, 8, 8);
+    };
+}
+
 function renderFlagpole()
 {
     checkReached();
@@ -940,6 +1065,7 @@ function renderFlagpole()
         flagY = max(flagTop, flagY - 5);
         if (flagY == flagTop) {
             isRaised = true;
+            level++;
         }
     } else {
         flagY = flagBottom;
@@ -978,20 +1104,42 @@ function renderDiedDialog()
     renderDialog("You Died", "Press Space to try again", "red");
 }
 
-function renderDialog(title, descr, color)
+function renderIntro()
 {
-    stroke(color);
+    renderDialog(introTitle, introText, "cyan", 100, 25);
+}
+
+function renderDialog(title, descr, cc, titleSize = 150, txtSize = 30)
+{
+    var bgColor = color(0, dialogOpacity);
+    var mainColor = cc;
+    if (typeof c !== 'object') {
+        mainColor = color(cc);
+    }
+    mainColor.setAlpha(dialogOpacity);
+    dialogOpacity = min(dialogOpacity + 8, 160);
+    
+    if (typeof descr === 'string') {
+        descr = [descr];
+    }
+    
+    stroke(mainColor);
     strokeWeight(10);
-    fill(0);
+    fill(bgColor);
     rect(80, 80, width - 160, height - 160);
+    
     textAlign(CENTER);
     textStyle(BOLD);
-    textSize(150);
     noStroke();
-    fill(color);
-    text(title, width/2, 320);
-    textSize(30);
-    text(descr, width/2, 450);
+    fill(mainColor);
+    
+    textSize(titleSize);
+    text(title, width/2, titleSize + 120);
+    
+    textSize(txtSize);
+    for (var i = 0; i < descr.length; i++) {
+        text(descr[i], width/2, 450 - (descr.length - i - 1) * txtSize * 1.3);
+    }
 }
 
 function drawLives()
@@ -1002,6 +1150,16 @@ function drawLives()
     noStroke();
     fill("green");
     text("Lives: " + lives, 30, 40);
+}
+
+function drawLevel()
+{
+    textAlign(CENTER);
+    textStyle(BOLD);
+    textSize(36);
+    noStroke();
+    fill("cyan");
+    text("Level: " + level, 512, 40);
 }
 
 function drawScores()
