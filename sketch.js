@@ -8,13 +8,15 @@ Alexander Mavrin
 
 var acceleration = 3;
 var jumpStartVelocity = 25;
-var lrSpeed = 3;
+var lrSpeed = 4;
 var borderLimit = 20;
 var topLimit = 100;
+var borderLeft = 0;
+var borderRight = 2500;
 
 var bodyColor = "#8A2BE2";
 var faceColor = "#FFE4C4";
-
+ 
 var gameChar_x;
 var gameChar_y;
 var jumpVelocity = 0;
@@ -29,6 +31,7 @@ var isInCanyon;
 var isFalling;
 var isPlummeting;
 var isDead;
+var isDyingSoundPlayed;
 var isReached;
 var isRaised;
 
@@ -39,9 +42,7 @@ var isDiedDialog;
 
 var scores = 0;
 
-var borderLeft = -512;
-var borderRight = 1536;
-var flagpole_x = 1480;
+var flagpole_x = borderRight - 50;
 var collectable;
 
 var trees_x = [];
@@ -55,7 +56,17 @@ var curCanyon = 0;
 
 var keyCodes = {left: 65, right: 68, jump: 32}; // top: 87, bottom: 83
 
-function setup() {
+var sounds = {};
+
+function preload() {
+    sounds.step = loadSound('sounds/gp-step.wav');
+    sounds.jump = loadSound('sounds/gp-jump.wav');
+    sounds.hit = loadSound('sounds/gp-hit.wav');
+    sounds.death = loadSound('sounds/gp-death.wav');
+    sounds.score = loadSound('sounds/gp-score.mp3');
+}
+
+function setup() { 
 	createCanvas(1024, 576);
     startGame();
 }
@@ -91,6 +102,7 @@ function resetScene() {
     isDead = false;
     isReached = false;
     isRaised = false;
+    isDyingSoundPlayed = false;
 }
 
 function draw()
@@ -101,8 +113,8 @@ function draw()
 	fill(0,155,0);
 	rect(0, floorPos_y, width, height - floorPos_y); //draw some green ground
     
-    push()
-    translate(getCameraX(), 0)
+    push();
+    translate(getCameraX(), 0);
     
 	//draw the canyon
     drawCanyons();
@@ -120,18 +132,21 @@ function draw()
     {
         drawCharDead();
     }
-    else if (isRaised) {
+    else if (isReached || isRaised) {
+        stopSteps();
         gameChar_y = floorPos_y;
 		drawCharFF();
     }
     else if(isLeft && (isFalling || isPlummeting))
 	{
+        stopSteps();
         moveCharJump();
         moveCharLeft();
 		drawCharJumpLeft();
     }
 	else if(isRight && (isFalling || isPlummeting))
 	{
+        stopSteps();
         moveCharJump();
         moveCharRight();
 		drawCharJumpRight();
@@ -139,22 +154,26 @@ function draw()
 	}
 	else if(isLeft)
 	{
+        startSteps();
         moveCharLeft();
 		drawCharLeft();
 	}
 	else if(isRight)
 	{
+        startSteps();
         moveCharRight();
 		drawCharRight();
 
 	}
 	else if(isFalling || isPlummeting)
 	{
+        stopSteps();
         moveCharJump();
 		drawCharJumpFF();
 	}
 	else
 	{
+        stopSteps();
 		drawCharFF();
 	}
     
@@ -164,6 +183,11 @@ function draw()
 
     if(isDead)
     {
+        if (!isDyingSoundPlayed) {
+            isDyingSoundPlayed = true;
+            sounds.death.play();
+        }
+        
         if (lives > 0) {
             renderDiedDialog();
         } else {
@@ -182,40 +206,40 @@ function draw()
 // Camera X coordinate related to character position and borders
 function getCameraX()
 {
-    return max(min(floor(width / 2) - gameChar_x, borderRight - width), borderLeft);
+    return min(max(floor(width / 2) - gameChar_x, width - borderRight), borderLeft);
     
 }
 
 function initTrees() {
     trees_x = [];
-    start = floor(random(borderLeft, borderLeft + 200))
+    start = floor(random(borderLeft, borderLeft + 200));
     for (i = start; i < borderRight+300; i += floor(random(200, 500))) {
-        trees_x.push(i)
+        trees_x.push(i);
     }
 }
 
 function initClouds() {
     clouds = [];
-    start = borderLeft - 200
+    start = borderLeft - 200;
     for (i = start; i < borderRight+200; i += floor(random(150, 300))) {
-        clouds.push({x: i, y: floor(random(50, 300)), size: floor(random(80, 140))})
+        clouds.push({x: i, y: floor(random(50, 300)), size: floor(random(80, 140))});
     }
 }
 
 function initMountains() {
     mountains = [];
-    start = floor(random(borderLeft, borderLeft + 500))
+    start = floor(random(borderLeft, borderLeft + 500));
     for (i = start; i < borderRight+400; i += floor(random(900, 1500))) {
-        mountains.push({x: i, size: floor(random(150, 250))})
+        mountains.push({x: i, size: floor(random(150, 250))});
     }
 }
 
 function initCanyons() {
     canyons = [];
-    start = floor(random(borderLeft+100, borderLeft + 500))
+    start = floor(random(borderLeft+100, borderLeft + 500));
     for (i = start; i < borderRight-100; i += floor(random(500, 700))) {
         if (abs(i - gameChar_x) < 100) continue;
-        canyons.push({x: i, width: floor(random(30, 40))})
+        canyons.push({x: i, width: floor(random(30, 40))});
     }
 }
 
@@ -249,11 +273,24 @@ function moveCharJump()
     }
 }
 
+function stopSteps()
+{
+    if (sounds.step.isPlaying()) {
+        sounds.step.pause();
+    }
+}
+function startSteps()
+{
+    if (!sounds.step.isPlaying()) {
+        sounds.step.loop();
+    }
+}
+
 function isCanyon() {
     for (i = 0; i < canyons.length; i++) {
         canyon = canyons[i];
         if (gameChar_x >= canyon.x - canyon.width / 2 && gameChar_x <= canyon.x + canyon.width / 2) {
-            curCanyon = i
+            curCanyon = i;
             return true;
         }
     }
@@ -280,7 +317,7 @@ function isCollectableReached(collectable)
     return gameChar_x > collectable.x - collectable.size / 2 - 10 &&
         gameChar_x < collectable.x + collectable.size / 2 + 10 &&
         gameChar_y < collectable.y + collectable.size / 2 + 70 &&
-        gameChar_y > collectable.y - collectable.size / 2
+        gameChar_y > collectable.y - collectable.size / 2;
 }
 
 function processAndDrawCollectables()
@@ -289,6 +326,7 @@ function processAndDrawCollectables()
         
         if (isCollectableReached(collectables[i])) {
             scores = scores + collectables[i].score;
+            sounds.score.play(0.35);
             collectables[i] = generateRandomCollectable();
         }
         drawCollectable(collectables[i]);
@@ -296,24 +334,24 @@ function processAndDrawCollectables()
 }
 
 function getFloor() {
-    return isCanyon() ? canyonPos_y : floorPos_y
+    return isCanyon() ? canyonPos_y : floorPos_y;
 }
 
 function generateRandomCollectables() {
     collectables = [];
     for (var i = 0; i < collectableNum; i++) {
-        collectables.push(generateRandomCollectable())
+        collectables.push(generateRandomCollectable());
     }
 }
 
 function generateRandomCollectable() {
     var maxJumpHeight = jumpStartVelocity * jumpStartVelocity / 2 / acceleration;
-    var randomScore = floor(random(1, 6))
+    var randomScore = floor(random(1, 6));
     
     return {
         x: floor(random(-300, width + 600)), 
         y: floorPos_y - 30 - floor(random(maxJumpHeight + 50)), 
-        size: randomScore * 5 + 5,
+        size: randomScore * 3 + 15,
         score: randomScore
     };
 }
@@ -413,9 +451,9 @@ function drawCharFF() {
 
 function drawCharLeft() {
     if (floor(gameChar_x / 20) % 2 == 0) {
-        drawCharLeft1()
+        drawCharLeft1();
     } else {
-        drawCharLeft2()
+        drawCharLeft2();
     }
 }
 
@@ -509,9 +547,9 @@ function drawCharLeft2() {
 
 function drawCharRight() {
     if (floor(gameChar_x / 20) % 2 == 0) {
-        drawCharRight1()
+        drawCharRight1();
     } else {
-        drawCharRight2()
+        drawCharRight2();
     }
 }
 
@@ -849,9 +887,9 @@ function drawCollectable(collectable)
 	noStroke();
     fill(255, 165, 0);
     ellipse(collectable.x, collectable.y, collectable.size, collectable.size);
-    fill(107, 142, 35);
+    fill(77, 92, 25);
     triangle(
-        collectable.x, collectable.y - collectable.size / 2, 
+        collectable.x, collectable.y - collectable.size / 2 + collectable.size / 4, 
         collectable.x, collectable.y - collectable.size / 2 - collectable.size / 3, 
         collectable.x + collectable.size / 3, collectable.y - collectable.size / 2 - collectable.size / 3
     );
@@ -922,7 +960,7 @@ function renderFlagpole()
 
 function checkReached() 
 {
-    isReached = isReached || abs(gameChar_x - flagpole_x) < 20
+    isReached = isReached || abs(gameChar_x - flagpole_x) < 20;
 }
 
 function renderGameOverDialog()
@@ -980,16 +1018,16 @@ function drawButtons()
 {
     textAlign(CENTER);
     textSize(24);
-    textStyle(NORMAL)
+    textStyle(NORMAL);
     strokeWeight(2);
     noFill();
     stroke(isLeft ? "gold" : "gray");
     rect(10, height - 50, 40, 40);
-    text("←", 30, height - 25);
+    text("\u2190", 30, height - 25);
     stroke(isJump ? "gold" : "gray");
     rect(55, height - 50, 40, 40);
-    text("↑", 75, height - 25);
+    text("\u2191", 75, height - 25);
     stroke(isRight ? "gold" : "gray");
     rect(100, height - 50, 40, 40);
-    text("→", 120, height - 25);
+    text("\u2192", 120, height - 25);
 }
