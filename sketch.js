@@ -61,7 +61,7 @@ var dialogOpacity = 8;
 var showIntro = true;
 var introTitle = "The Game";
 var introText = [
-    "This is a game about the adventures of a brave noname guy,",
+    "This is a game about the adventures of a brave noname hero,",
     "who loves apples and hates ghosts. Thats why he travels",
     "through levels, collecting the first and killing the second.",
     "By jumping, he can either reach a distant apple or kill a ghost.",
@@ -84,7 +84,6 @@ function preload() {
 
 function setup() { 
 	createCanvas(1024, 576);
-    startGame();
 }
 
 function startGame() {
@@ -108,13 +107,14 @@ function resetScene() {
     
     collectableNum = level + 4;
     ghostsNum = level * 2 + 1;
-    generateRandomCollectables();
-    generateGhosts();
     
+    // init all objects
     initTrees();
     initClouds();
     initMountains();
     initCanyons();
+    generateRandomCollectables();
+    generateGhosts();
 
     isLeft = false;
     isRight = false;
@@ -206,11 +206,13 @@ function draw()
 		drawCharFF();
 	}
     
+    // process and draw interactable objects
     processAndDrawGhosts();
     processAndDrawCollectables();
     
     pop();
 
+    // death logic
     if(isDead)
     {
         if (!isDyingSoundPlayed) {
@@ -228,6 +230,7 @@ function draw()
         renderNextLevelDialog();
     }
     
+    // draw controls and game info
     drawButtons();
     drawLives();
     drawLevel();
@@ -243,8 +246,8 @@ function getCameraX()
 
 function initTrees() {
     trees_x = [];
-    start = floor(random(borderLeft, borderLeft + 200));
-    for (i = start; i < borderRight+300; i += floor(random(200, 500))) {
+    start = floor(random(borderLeft + 100, borderLeft + 250));
+    for (i = start; i < borderRight - 100; i += floor(random(150, 350))) {
         trees_x.push(i);
     }
 }
@@ -259,8 +262,8 @@ function initClouds() {
 
 function initMountains() {
     mountains = [];
-    start = floor(random(borderLeft, borderLeft + 500));
-    for (i = start; i < borderRight+400; i += floor(random(900, 1500))) {
+    start = floor(random(borderLeft - 300, borderLeft + 300));
+    for (i = start; i < borderRight + 400; i += floor(random(900, 1500))) {
         mountains.push({x: i, size: floor(random(150, 250))});
     }
 }
@@ -354,12 +357,16 @@ function isCollectableReached(collectable)
 function processAndDrawCollectables()
 {
     for (var i = 0; i < collectables.length; i++) {
-        
+        if (collectables[i].collected) {
+            continue;
+        }
         if (isCollectableReached(collectables[i])) {
             scores = scores + collectables[i].score;
             sounds.score.play(0.35);
             if (random() > 0.5) {
                 collectables[i] = generateRandomCollectable();
+            } else {
+                collectables[i].collected = true;
             }
         }
         drawCollectable(collectables[i]);
@@ -379,7 +386,6 @@ function generateGhosts() {
         } 
         ghosts.push(new Ghost(x, 50));
     }
-    console.log(ghosts);
 }
 
 function generateRandomCollectables() {
@@ -393,11 +399,14 @@ function generateRandomCollectable() {
     var maxJumpHeight = jumpStartVelocity * jumpStartVelocity / 2 / acceleration;
     var randomScore = floor(random(1, 6));
     
+    // generate an apple on a random tree
+    var randomTree = floor(random(0, trees_x.length));
     return {
-        x: floor(random(-300, width + 600)), 
-        y: floorPos_y - 30 - floor(random(maxJumpHeight + 50)), 
+        x: round(random(trees_x[randomTree] - 45, trees_x[randomTree] + 45)), 
+        y: floorPos_y - 40 - floor(random(maxJumpHeight + 40)), 
         size: randomScore * 3 + 15,
-        score: randomScore
+        score: randomScore,
+        collected: false,
     };
 }
 
@@ -910,8 +919,9 @@ function drawTree(x, y)
     rect(x - 5, y - 200, 10, 200);
     fill(107, 142, 35);
     ellipse(x, y - 212, 60, 120);
-    ellipse(x - 20, y - 132, 80, 140);
     ellipse(x + 20, y - 162, 80, 120);
+    ellipse(x - 20, y - 132, 80, 140);
+    ellipse(x + 20, y - 82, 70, 80);
 }
 
 function drawCanyon(canyon)
